@@ -24,3 +24,4 @@ packages = ["polybot_v3"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]
