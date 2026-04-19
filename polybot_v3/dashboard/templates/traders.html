@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}Traders{% endblock %}
+{% block content %}
+
+<div class="card">
+  <h3>Tracked traders <span class="count">({{ data.traders|length }})</span></h3>
+  <div class="filter-bar">
+    <input type="text" id="filterAddr" placeholder="Filter by address…">
+    <select id="filterProfit">
+      <option value="">All</option>
+      <option value="profit">Profitable for us</option>
+      <option value="loss">Losing for us</option>
+    </select>
+    <span class="flex1"></span>
+    <button class="ghost" onclick="location.reload()">↻ Refresh</button>
+  </div>
+  {% if data.traders %}
+  <table id="tradersTable">
+    <thead>
+      <tr>
+        <th>Address</th>
+        <th class="sortable">Equity</th>
+        <th class="sortable">30d ROI</th>
+        <th class="sortable">30d P&L</th>
+        <th class="sortable">7d ROI</th>
+        <th class="sortable">Open contrib</th>
+        <th class="sortable">Attrib P&L</th>
+        <th>Trades</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for t in data.traders %}
+    <tr data-addr="{{ t.address }}" data-attrib="{{ t.attrib_pnl }}">
+      <td class="mono">
+        <a href="https://app.hyperliquid.xyz/trade/{{ t.address }}" target="_blank"
+           style="color:var(--accent);">{{ t.address[:10] }}…{{ t.address[-6:] }}</a>
+      </td>
+      <td data-sort="{{ t.equity }}">${{ "%.0f"|format(t.equity) }}</td>
+      <td class="{% if t.roi_30d >= 0 %}positive{% else %}negative{% endif %}" data-sort="{{ t.roi_30d }}">
+        {{ "%.1f"|format(t.roi_30d * 100) }}%
+      </td>
+      <td class="{% if t.pnl_30d >= 0 %}positive{% else %}negative{% endif %}" data-sort="{{ t.pnl_30d }}">
+        ${{ "%.0f"|format(t.pnl_30d) }}
+      </td>
+      <td class="{% if t.roi_7d >= 0 %}positive{% else %}negative{% endif %}" data-sort="{{ t.roi_7d }}">
+        {{ "%.1f"|format(t.roi_7d * 100) }}%
+      </td>
+      <td data-sort="{{ t.open_contribution }}">${{ "%.2f"|format(t.open_contribution) }}</td>
+      <td class="{% if t.attrib_pnl >= 0 %}positive{% else %}negative{% endif %}" data-sort="{{ t.attrib_pnl }}">
+        ${{ "%+.2f"|format(t.attrib_pnl) }}
+      </td>
+      <td>{{ t.attrib_trades }}</td>
+      <td>
+        <button class="danger" onclick="removeTrader('{{ t.address }}')">Remove</button>
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty">No traders tracked yet. Wait for the next leaderboard refresh (every 6h).</div>
+  {% endif %}
+</div>
+
+{% endblock %}
+{% block scripts %}
+<script>
+function applyFilters() {
+  const addr = document.getElementById("filterAddr").value.toLowerCase();
+  const profit = document.getElementById("filterProfit").value;
+  document.querySelectorAll("#tradersTable tbody tr").forEach(tr => {
+    const rAddr = tr.dataset.addr.toLowerCase();
+    const rAttrib = parseFloat(tr.dataset.attrib);
+    let show = true;
+    if (addr && !rAddr.includes(addr)) show = false;
+    if (profit === "profit" && rAttrib <= 0) show = false;
+    if (profit === "loss" && rAttrib > 0) show = false;
+    tr.style.display = show ? "" : "none";
+  });
+}
+["filterAddr","filterProfit"].forEach(id =>
+  document.getElementById(id).addEventListener("input", applyFilters));
+
+function removeTrader(addr) {
+  if (!confirm(`Stop copying trader ${addr.slice(0,10)}...?`)) return;
+  fetch(`/api/remove-trader/${addr}`, {method:"POST"})
+    .then(() => {showToast("Trader removed"); setTimeout(() => location.reload(), 500);});
+}
+</script>
+{% endblock %}

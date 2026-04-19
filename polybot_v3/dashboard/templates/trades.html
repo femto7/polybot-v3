@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}Trades{% endblock %}
+{% block content %}
+
+<div class="card">
+  <h3>Closed trades <span class="count">({{ data.trades|length }} shown, last 100)</span></h3>
+  <div class="filter-bar">
+    <input type="text" id="filterAsset" placeholder="Filter by asset…">
+    <select id="filterResult">
+      <option value="">All results</option>
+      <option value="win">Wins only</option>
+      <option value="loss">Losses only</option>
+    </select>
+    <select id="filterSide">
+      <option value="">All sides</option>
+      <option value="LONG">LONG</option>
+      <option value="SHORT">SHORT</option>
+    </select>
+    <span class="flex1"></span>
+    <a href="/api/trades.csv"><button class="ghost">📥 Export CSV</button></a>
+    <button class="ghost" onclick="location.reload()">↻ Refresh</button>
+  </div>
+  {% if data.trades %}
+  <table id="tradesTable">
+    <thead>
+      <tr>
+        <th class="sortable">Asset</th><th>Side</th>
+        <th class="sortable">Size</th><th class="sortable">Entry</th>
+        <th class="sortable">Exit</th><th>Result</th>
+        <th class="sortable">P&L</th><th class="sortable">%</th>
+        <th>Sources</th><th>Closed</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for t in data.trades %}
+    {% set pnl_pct = ((t.exit_price - t.entry_price) / t.entry_price * 100) * (1 if t.side == "LONG" else -1) %}
+    <tr data-asset="{{ t.asset }}" data-side="{{ t.side }}" data-pnl="{{ t.realized_pnl }}">
+      <td><b>{{ t.asset }}</b></td>
+      <td><span class="tag tag-{{ t.side|lower }}">{{ t.side }}</span></td>
+      <td class="mono" data-sort="{{ t.size }}">{{ "%.4f"|format(t.size) }}</td>
+      <td class="mono" data-sort="{{ t.entry_price }}">{{ "%.4f"|format(t.entry_price) }}</td>
+      <td class="mono" data-sort="{{ t.exit_price }}">{{ "%.4f"|format(t.exit_price) }}</td>
+      <td><span class="tag tag-{% if t.realized_pnl >= 0 %}win{% else %}loss{% endif %}">
+        {% if t.realized_pnl >= 0 %}WIN{% else %}LOSS{% endif %}
+      </span></td>
+      <td class="{% if t.realized_pnl >= 0 %}positive{% else %}negative{% endif %}" data-sort="{{ t.realized_pnl }}">
+        ${{ "%+.2f"|format(t.realized_pnl) }}
+      </td>
+      <td class="{% if pnl_pct >= 0 %}positive{% else %}negative{% endif %}" data-sort="{{ pnl_pct }}">
+        {{ "%+.1f"|format(pnl_pct) }}%
+      </td>
+      <td class="mono truncate" title="{{ t.source_traders|join(', ') }}">
+        {{ t.source_traders|length }}
+      </td>
+      <td class="mono">{{ t.closed_at[:16] }}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty">No closed trades yet.</div>
+  {% endif %}
+</div>
+
+{% endblock %}
+{% block scripts %}
+<script>
+function applyFilters() {
+  const asset = document.getElementById("filterAsset").value.toUpperCase();
+  const result = document.getElementById("filterResult").value;
+  const side = document.getElementById("filterSide").value;
+  document.querySelectorAll("#tradesTable tbody tr").forEach(tr => {
+    const rAsset = tr.dataset.asset;
+    const rSide = tr.dataset.side;
+    const rPnl = parseFloat(tr.dataset.pnl);
+    let show = true;
+    if (asset && !rAsset.includes(asset)) show = false;
+    if (side && rSide !== side) show = false;
+    if (result === "win" && rPnl <= 0) show = false;
+    if (result === "loss" && rPnl > 0) show = false;
+    tr.style.display = show ? "" : "none";
+  });
+}
+["filterAsset","filterResult","filterSide"].forEach(id =>
+  document.getElementById(id).addEventListener("input", applyFilters));
+</script>
+{% endblock %}

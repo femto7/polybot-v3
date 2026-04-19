@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block title %}Positions{% endblock %}
+{% block content %}
+
+<div class="card">
+  <h3>All open positions <span class="count">({{ data.positions|length }})</span></h3>
+  <div class="filter-bar">
+    <input type="text" id="filterAsset" placeholder="Filter by asset (e.g. BTC)…">
+    <select id="filterSide">
+      <option value="">All sides</option>
+      <option value="LONG">LONG only</option>
+      <option value="SHORT">SHORT only</option>
+    </select>
+    <select id="filterPnl">
+      <option value="">All P&L</option>
+      <option value="win">Winning only</option>
+      <option value="loss">Losing only</option>
+    </select>
+    <select id="filterSize">
+      <option value="">All sizes</option>
+      <option value="gte50">≥ $50</option>
+      <option value="gte20">≥ $20</option>
+      <option value="lt20">&lt; $20</option>
+    </select>
+    <span class="flex1"></span>
+    <a href="/api/positions.csv"><button class="ghost">📥 Export CSV</button></a>
+    <button class="ghost" onclick="location.reload()">↻ Refresh</button>
+  </div>
+  {% if data.positions %}
+  <table id="positionsTable">
+    <thead>
+      <tr>
+        <th class="sortable">Asset</th><th>Side</th>
+        <th class="sortable">Size</th><th class="sortable">Entry</th>
+        <th class="sortable">Current</th><th class="sortable">Notional</th>
+        <th class="sortable">Unrealized</th><th class="sortable">%</th>
+        <th>Sources</th><th>Opened</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for p in data.positions %}
+    <tr data-side="{{ p.side }}" data-pnl="{{ p.unrealized_pnl }}"
+        data-asset="{{ p.asset }}" data-notional="{{ p.notional }}">
+      <td><b>{{ p.asset }}</b></td>
+      <td><span class="tag tag-{{ p.side|lower }}">{{ p.side }}</span></td>
+      <td class="mono" data-sort="{{ p.size }}">{{ "%.4f"|format(p.size) }}</td>
+      <td class="mono" data-sort="{{ p.entry_price }}">{{ "%.4f"|format(p.entry_price) }}</td>
+      <td class="mono" data-sort="{{ p.current_price }}">{{ "%.4f"|format(p.current_price) }}</td>
+      <td data-sort="{{ p.notional }}">${{ "%.2f"|format(p.notional) }}</td>
+      <td class="{% if p.unrealized_pnl >= 0 %}positive{% else %}negative{% endif %}" data-sort="{{ p.unrealized_pnl }}">
+        ${{ "%+.2f"|format(p.unrealized_pnl) }}
+      </td>
+      <td class="{% if p.unrealized_pct >= 0 %}positive{% else %}negative{% endif %}" data-sort="{{ p.unrealized_pct }}">
+        {{ "%+.1f"|format(p.unrealized_pct) }}%
+      </td>
+      <td class="mono truncate" title="{{ p.source_traders|join(', ') }}">
+        {{ p.source_traders|length }}
+      </td>
+      <td class="mono">{{ p.opened_at[:16] }}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty">No open positions.</div>
+  {% endif %}
+</div>
+
+{% endblock %}
+{% block scripts %}
+<script>
+function applyFilters() {
+  const asset = document.getElementById("filterAsset").value.toUpperCase();
+  const side = document.getElementById("filterSide").value;
+  const pnl = document.getElementById("filterPnl").value;
+  const size = document.getElementById("filterSize").value;
+  document.querySelectorAll("#positionsTable tbody tr").forEach(tr => {
+    const rAsset = tr.dataset.asset;
+    const rSide = tr.dataset.side;
+    const rPnl = parseFloat(tr.dataset.pnl);
+    const rNotional = parseFloat(tr.dataset.notional);
+    let show = true;
+    if (asset && !rAsset.includes(asset)) show = false;
+    if (side && rSide !== side) show = false;
+    if (pnl === "win" && rPnl <= 0) show = false;
+    if (pnl === "loss" && rPnl > 0) show = false;
+    if (size === "gte50" && rNotional < 50) show = false;
+    if (size === "gte20" && rNotional < 20) show = false;
+    if (size === "lt20" && rNotional >= 20) show = false;
+    tr.style.display = show ? "" : "none";
+  });
+}
+["filterAsset","filterSide","filterPnl","filterSize"].forEach(id =>
+  document.getElementById(id).addEventListener("input", applyFilters));
+</script>
+{% endblock %}

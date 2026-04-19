@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="refresh" content="15">
+<title>Polybot v3 — {% block title %}Dashboard{% endblock %}</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+:root {
+  --bg: #0f1419; --card: #1a1f2e; --border: #2a3040; --text: #e0e6ed;
+  --muted: #8b9ab0; --accent: #4a9eff; --pos: #3fb950; --neg: #f85149;
+  --header-bg: #1a1f2e;
+}
+[data-theme="light"] {
+  --bg: #f5f5f7; --card: #ffffff; --border: #e0e0e6; --text: #1a1f2e;
+  --muted: #606878; --accent: #0366d6; --pos: #1a7f37; --neg: #cf222e;
+  --header-bg: #ffffff;
+}
+* { box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: var(--bg); color: var(--text); margin: 0;
+}
+.container { max-width: 1400px; margin: 0 auto; padding: 20px; }
+nav {
+  background: var(--header-bg); border-bottom: 1px solid var(--border);
+  padding: 12px 20px; display: flex; gap: 16px; align-items: center;
+  position: sticky; top: 0; z-index: 10;
+}
+.brand { font-size: 18px; font-weight: 800; color: var(--accent); letter-spacing: 0.5px; }
+nav a { color: var(--muted); text-decoration: none; font-weight: 500; font-size: 14px; padding: 4px 8px; border-radius: 4px; }
+nav a.active, nav a:hover { color: var(--accent); background: rgba(74,158,255,0.08); }
+.flex1 { flex: 1; }
+.kpi-row {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px; margin-bottom: 20px;
+}
+.kpi {
+  background: var(--card); border: 1px solid var(--border); border-radius: 8px;
+  padding: 14px;
+}
+.kpi .label {
+  color: var(--muted); font-size: 10px; text-transform: uppercase;
+  letter-spacing: 0.5px; font-weight: 600;
+}
+.kpi .value { font-size: 22px; font-weight: 700; margin-top: 4px; }
+.kpi .sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.positive { color: var(--pos); }
+.negative { color: var(--neg); }
+.card {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 8px; padding: 16px; margin-bottom: 20px;
+}
+.card h3 { margin: 0 0 12px; font-size: 14px; display: flex; align-items: center; gap: 8px; }
+.card h3 .count { color: var(--muted); font-weight: 400; font-size: 12px; }
+table { width: 100%; border-collapse: collapse; }
+th {
+  text-align: left; padding: 8px 10px; color: var(--muted); font-size: 10px;
+  text-transform: uppercase; border-bottom: 1px solid var(--border); letter-spacing: 0.5px;
+}
+th.sortable { cursor: pointer; user-select: none; }
+th.sortable:hover { color: var(--accent); }
+td { padding: 10px; border-bottom: 1px solid var(--border); font-size: 13px; vertical-align: middle; }
+tr:hover { background: rgba(74,158,255,0.03); }
+.tag {
+  display: inline-block; padding: 2px 8px; border-radius: 4px;
+  font-size: 10px; font-weight: 700; letter-spacing: 0.3px;
+}
+.tag-long { background: rgba(63,185,80,0.15); color: var(--pos); }
+.tag-short { background: rgba(248,81,73,0.15); color: var(--neg); }
+.tag-win { background: rgba(63,185,80,0.15); color: var(--pos); }
+.tag-loss { background: rgba(248,81,73,0.15); color: var(--neg); }
+.status-dot {
+  display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+  background: var(--pos); margin-right: 6px;
+  animation: pulse 2s infinite;
+}
+.status-dot.paused { background: var(--neg); animation: none; }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+input[type="text"], select {
+  background: var(--bg); border: 1px solid var(--border); color: var(--text);
+  padding: 6px 10px; border-radius: 4px; font-size: 13px;
+}
+button {
+  background: var(--accent); color: white; border: none;
+  padding: 6px 14px; border-radius: 4px; cursor: pointer;
+  font-size: 13px; font-weight: 600;
+}
+button:hover { opacity: 0.9; }
+button.ghost {
+  background: transparent; border: 1px solid var(--border); color: var(--text);
+}
+button.danger { background: var(--neg); }
+.filter-bar { display: flex; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; align-items: center; }
+.filter-bar label { font-size: 12px; color: var(--muted); }
+.mono { font-family: "SF Mono", Monaco, Consolas, monospace; font-size: 12px; }
+.truncate { max-width: 200px; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; display: inline-block; vertical-align: bottom; }
+.toast {
+  position: fixed; bottom: 20px; right: 20px; padding: 12px 18px;
+  background: var(--card); border: 1px solid var(--border); border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.2); font-size: 13px;
+  transform: translateY(100px); opacity: 0; transition: all 0.3s ease;
+}
+.toast.show { transform: translateY(0); opacity: 1; }
+.empty { text-align: center; padding: 40px 20px; color: var(--muted); font-size: 14px; }
+</style>
+</head>
+<body>
+<nav>
+  <span class="brand">POLYBOT v3</span>
+  <a href="/" {% if request.path == "/" %}class="active"{% endif %}>Dashboard</a>
+  <a href="/positions" {% if request.path == "/positions" %}class="active"{% endif %}>Positions</a>
+  <a href="/trades" {% if request.path == "/trades" %}class="active"{% endif %}>Trades</a>
+  <a href="/traders" {% if request.path == "/traders" %}class="active"{% endif %}>Traders</a>
+  <a href="/analytics" {% if request.path == "/analytics" %}class="active"{% endif %}>Analytics</a>
+  <span class="flex1"></span>
+  <span style="font-size:12px;">
+    <span class="status-dot {% if data.paused %}paused{% endif %}"></span>
+    {% if data.paused %}PAUSED{% else %}ACTIVE{% endif %}
+  </span>
+  <button class="ghost" onclick="toggleTheme()">🌓</button>
+  {% if data.paused %}
+    <button onclick="doAction('/api/resume', 'Resumed')">▶ Resume</button>
+  {% else %}
+    <button class="ghost" onclick="doAction('/api/pause', 'Paused')">⏸ Pause</button>
+  {% endif %}
+</nav>
+
+<div class="container">
+{% block content %}{% endblock %}
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script>
+function toggleTheme() {
+  const cur = document.documentElement.getAttribute("data-theme");
+  const next = cur === "light" ? "dark" : "light";
+  document.documentElement.setAttribute("data-theme", next);
+  localStorage.setItem("theme", next);
+}
+const saved = localStorage.getItem("theme");
+if (saved) document.documentElement.setAttribute("data-theme", saved);
+
+function showToast(msg) {
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  setTimeout(() => t.classList.remove("show"), 2000);
+}
+
+function doAction(url, msg) {
+  fetch(url, {method:"POST"}).then(() => {
+    showToast(msg);
+    setTimeout(() => location.reload(), 500);
+  });
+}
+
+// Sortable tables
+document.addEventListener("DOMContentLoaded", () => {
+  document.querySelectorAll("th.sortable").forEach(th => {
+    th.addEventListener("click", () => {
+      const tbody = th.closest("table").querySelector("tbody");
+      const rows = Array.from(tbody.querySelectorAll("tr"));
+      const idx = Array.from(th.parentNode.children).indexOf(th);
+      const asc = th.classList.toggle("asc");
+      rows.sort((a, b) => {
+        const av = a.children[idx].dataset.sort || a.children[idx].textContent;
+        const bv = b.children[idx].dataset.sort || b.children[idx].textContent;
+        const an = parseFloat(av), bn = parseFloat(bv);
+        if (!isNaN(an) && !isNaN(bn)) return asc ? an - bn : bn - an;
+        return asc ? av.localeCompare(bv) : bv.localeCompare(av);
+      });
+      rows.forEach(r => tbody.appendChild(r));
+    });
+  });
+});
+</script>
+{% block scripts %}{% endblock %}
+</body>
+</html>
