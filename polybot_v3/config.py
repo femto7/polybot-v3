@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-HYPERLIQUID_INFO_URL = "https://api.hyperliquid.xyz/info"
+HYPERLIQUID_INFO_URL = "https://api.hyperliquid.xyz"
 HYPERLIQUID_WS_URL = "wss://api.hyperliquid.xyz/ws"
 HYPERLIQUID_LEADERBOARD_URL = "https://stats-data.hyperliquid.xyz/Mainnet/leaderboard"
 

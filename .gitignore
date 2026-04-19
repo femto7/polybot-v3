@@ -13,3 +13,4 @@ data/bot_state.json
 .env
 start_bot.bat
 .pytest_cache/
+start_dashboard.bat
