@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+dist/
+build/
+data/positions.json
+data/trades.json
+data/traders.json
+data/trader_states.json
+data/bankroll_history.json
+data/bot_state.json
+.env
+start_bot.bat
+.pytest_cache/
