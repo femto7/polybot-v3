@@ -19,7 +19,8 @@ def test_single_trader_proportional_sizing():
     assert "BTC" in targets
     # trader BTC notional = 47500, exposure 95%
     # our share per trader = 50, contribution = 50 * 0.95 = 47.5
-    assert targets["BTC"].notional == pytest.approx(47.5, abs=0.5)
+    # Clamped by per-asset cap (5% of 500 = 25)
+    assert targets["BTC"].notional == pytest.approx(25.0, abs=0.5)
     assert targets["BTC"].side == "LONG"
 
 
@@ -29,8 +30,8 @@ def test_multiple_traders_aggregate_long():
         "0xB": _trader_snap(100_000, {"BTC": {"side": "LONG", "size": 1.0, "entry": 95000}}),
     }
     targets = compute_target_portfolio(traders, our_bankroll=500.0, max_traders=10)
-    # Both have ~95% exposure, $50 share each → ~$95 total
-    assert targets["BTC"].notional == pytest.approx(95.0, abs=1.0)
+    # Both have ~95% exposure, $50 share each → ~$95 total, capped at 5% per asset = $25
+    assert targets["BTC"].notional == pytest.approx(25.0, abs=0.5)
     assert targets["BTC"].side == "LONG"
 
 
@@ -50,8 +51,8 @@ def test_per_asset_cap_enforced():
         })
     }
     targets = compute_target_portfolio(traders, our_bankroll=500.0, max_traders=10)
-    # Capped at 20% bankroll = $100
-    assert targets["BTC"].notional == pytest.approx(100.0, abs=1.0)
+    # Capped at 5% bankroll = $25
+    assert targets["BTC"].notional == pytest.approx(25.0, abs=1.0)
 
 
 def test_empty_traders():
@@ -94,8 +95,8 @@ def test_leverage_clamped_at_max():
     targets = compute_target_portfolio(traders, our_bankroll=500.0, max_traders=10)
     # exposure_ratio would be 10x but clamped to MAX_LEVERAGE=5
     # our share per trader = 50, so our contribution = 50 * 5 = 250
-    # But per-asset cap = 100
-    assert targets["BTC"].notional == pytest.approx(100.0, abs=1.0)
+    # But per-asset cap = 5% of 500 = 25
+    assert targets["BTC"].notional == pytest.approx(25.0, abs=1.0)
 
 
 def test_total_exposure_cap():
@@ -114,5 +115,5 @@ def test_total_exposure_cap():
     }
     targets = compute_target_portfolio(traders, our_bankroll=500.0, max_traders=10)
     total_exposure = sum(t.notional for t in targets.values())
-    # Total exposure cap = 80% of 500 = 400
-    assert total_exposure <= 400.0 + 1.0
+    # Total exposure cap = 500% of 500 = 2500 (5x leverage), per-asset cap 5% = $25
+    assert total_exposure <= 2500.0 + 1.0
