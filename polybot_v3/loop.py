@@ -67,6 +67,7 @@ def reconcile_positions(
     targets: dict[str, TargetPosition],
     prices: dict[str, float],
     open_new: bool = True,
+    executor=None,
 ) -> None:
     current = tracker.load_positions()
 
@@ -75,6 +76,12 @@ def reconcile_positions(
         target = targets.get(asset)
         if target is None or target.side != current[asset].side:
             px = prices.get(asset, current[asset].entry_price)
+            if executor is not None:
+                try:
+                    executor.market_close(asset)
+                except Exception:
+                    log.error("LIVE close failed for %s", asset, exc_info=True)
+                    continue
             trade = tracker.close_position(asset, exit_price=px)
             if trade:
                 emoji = "✅" if trade.realized_pnl >= 0 else "❌"
@@ -128,6 +135,17 @@ def reconcile_positions(
             delta = abs(existing.notional - target.notional) / max(existing.notional, 1.0)
             if delta < 0.10:
                 continue
+
+        if executor is not None:
+            try:
+                # If resizing (same side), close first then reopen at new size
+                if asset in current and current[asset].side == target.side:
+                    executor.market_close(asset)
+                executor.market_open(asset, target.side, size)
+            except Exception:
+                log.error("LIVE open failed for %s", asset, exc_info=True)
+                continue
+
         pos = Position(
             asset=asset,
             side=target.side,
@@ -146,7 +164,7 @@ def reconcile_positions(
         )
 
 
-def run_monitor_cycle(client: HyperliquidClient, tracker: Tracker) -> None:
+def run_monitor_cycle(client: HyperliquidClient, tracker: Tracker, executor=None) -> None:
     if is_paused():
         log.info("Bot paused, skipping monitor cycle")
         return
@@ -171,7 +189,7 @@ def run_monitor_cycle(client: HyperliquidClient, tracker: Tracker) -> None:
             f"holding fire (traders losing collectively)"
         )
         # Still check existing positions for stops, just don't open new
-        reconcile_positions(tracker, {}, prices, open_new=False)
+        reconcile_positions(tracker, {}, prices, open_new=False, executor=executor)
         tracker.record_bankroll_snapshot(prices)
         return
 
@@ -186,15 +204,22 @@ def run_monitor_cycle(client: HyperliquidClient, tracker: Tracker) -> None:
         trader_weights=trader_weights,
     )
 
-    reconcile_positions(tracker, targets, prices)
+    reconcile_positions(tracker, targets, prices, executor=executor)
     tracker.record_bankroll_snapshot(prices)
 
 
-def run_loop(use_websocket: bool = True) -> None:
+def run_loop(use_websocket: bool = True, live: bool = False) -> None:
     client = HyperliquidClient()
     tracker = Tracker()
-    log.info("Polybot v3 started (paper mode, ws=%s)", use_websocket)
-    send_message(f"🚀 Polybot v3 started (paper, ws={'on' if use_websocket else 'off'})")
+    executor = None
+    if live:
+        from polybot_v3.executor import LiveExecutor
+        executor = LiveExecutor()
+        log.warning("LIVE MODE ACTIVE — real orders will be placed")
+        send_message("⚡ Polybot v3 LIVE MODE ACTIVE — real orders!")
+    else:
+        log.info("Polybot v3 started (paper mode, ws=%s)", use_websocket)
+        send_message(f"🚀 Polybot v3 started (paper, ws={'on' if use_websocket else 'off'})")
 
     # Wake event fired by WS on a trader's fill → triggers immediate reconcile
     wake_event = threading.Event()
@@ -221,7 +246,7 @@ def run_loop(use_websocket: bool = True) -> None:
                 if rt is not None:
                     rt.sync_subscriptions([t["address"] for t in tracker.load_traders()])
 
-            run_monitor_cycle(client, tracker)
+            run_monitor_cycle(client, tracker, executor=executor)
         except Exception:
             log.error("Cycle failed", exc_info=True)
             send_message("⚠️ Cycle failed — check logs")

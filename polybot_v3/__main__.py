@@ -48,7 +48,11 @@ def main() -> int:
     sub = parser.add_subparsers(dest="command")
 
     sub.add_parser("status", help="Show current state")
-    sub.add_parser("run", help="Start the bot loop")
+    run_parser = sub.add_parser("run", help="Start the bot loop")
+    run_parser.add_argument("--live", action="store_true",
+                             help="LIVE mode — real orders (requires HYPERLIQUID_PRIVATE_KEY)")
+    run_parser.add_argument("--no-ws", action="store_true",
+                             help="Disable WebSocket (polling only)")
 
     dash = sub.add_parser("dashboard", help="Launch web dashboard")
     dash.add_argument("--port", type=int, default=DASHBOARD_PORT)
@@ -64,7 +68,7 @@ def main() -> int:
             format="%(asctime)s %(levelname)s %(name)s: %(message)s",
         )
         from polybot_v3.loop import run_loop
-        run_loop()
+        run_loop(use_websocket=not args.no_ws, live=args.live)
         return 0
     if args.command == "dashboard":
         logging.basicConfig(level=logging.INFO)
