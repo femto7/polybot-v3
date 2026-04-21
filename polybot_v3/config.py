@@ -19,9 +19,9 @@ MIN_TRADER_ROI_30D = 0.05
 MIN_TRADER_TRADES_30D = 10
 MAX_TRADER_DRAWDOWN = 0.30
 
-MAX_POSITION_PCT = 0.05
-MAX_TOTAL_EXPOSURE_PCT = 5.0  # up to 5x leverage total (matches MAX_LEVERAGE)
-MAX_LEVERAGE = 5.0
+MAX_POSITION_PCT = 0.10  # up to 10% of bankroll per asset (leveraged)
+MAX_TOTAL_EXPOSURE_PCT = 20.0  # up to 20x leverage total (matches MAX_LEVERAGE)
+MAX_LEVERAGE = 20.0
 STOP_LOSS_PCT = 0.05
 TRAIL_STOP_PCT = 0.03  # Close if price retraces 3% from peak (after 3% favorable move)
 TRAIL_ACTIVATION_PCT = 0.03
