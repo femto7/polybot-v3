@@ -8,6 +8,7 @@ from polybot_v3.config import (
     MAX_POSITION_PCT,
     MAX_TOTAL_EXPOSURE_PCT,
     MIN_POSITION_USD,
+    MIN_TRADER_EXPOSURE,
 )
 
 log = logging.getLogger(__name__)
@@ -72,6 +73,9 @@ def compute_target_portfolio(
         for asset, p in snap["positions"].items():
             trader_notional = p["size"] * p["entry"]
             exposure_ratio = trader_notional / equity  # can be > 1 if leverage
+            # Skip low-conviction positions (< MIN_TRADER_EXPOSURE of equity)
+            if exposure_ratio < MIN_TRADER_EXPOSURE:
+                continue
             # Clamp exposure to MAX_LEVERAGE (even if trader uses 20x)
             exposure_ratio = min(exposure_ratio, MAX_LEVERAGE)
             our_contribution = trader_share * exposure_ratio

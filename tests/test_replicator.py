@@ -19,8 +19,7 @@ def test_single_trader_proportional_sizing():
     assert "BTC" in targets
     # trader BTC notional = 47500, exposure 95%
     # our share per trader = 50, contribution = 50 * 0.95 = 47.5
-    # Clamped by per-asset cap (5% of 500 = 25)
-    assert targets["BTC"].notional == pytest.approx(50.0, abs=0.5)
+    assert targets["BTC"].notional == pytest.approx(47.5, abs=0.5)
     assert targets["BTC"].side == "LONG"
 
 
@@ -70,14 +69,13 @@ def test_tiny_position_filtered_out():
 
 
 def test_weighted_traders_favor_higher_score():
-    # Use small exposure so per-asset cap doesn't kick in
+    # Use 30% exposure (above MIN_TRADER_EXPOSURE=20%)
     traders = {
-        "0xA": _trader_snap(100_000, {"BTC": {"side": "LONG", "size": 0.05, "entry": 100_000}}),  # 5% exposure
-        "0xB": _trader_snap(100_000, {"ETH": {"side": "LONG", "size": 1.4, "entry": 3500}}),  # 5% exposure
+        "0xA": _trader_snap(100_000, {"BTC": {"side": "LONG", "size": 0.3, "entry": 100_000}}),  # 30% exposure
+        "0xB": _trader_snap(100_000, {"ETH": {"side": "LONG", "size": 8.57, "entry": 3500}}),  # 30% exposure
     }
-    # Bigger bankroll so 5% × share is well under 20% per-asset cap
     targets = compute_target_portfolio(
-        traders, our_bankroll=10_000.0, max_traders=2,
+        traders, our_bankroll=100_000.0, max_traders=2,
         trader_weights={"0xA": 3.0, "0xB": 1.0},
     )
     assert "BTC" in targets and "ETH" in targets

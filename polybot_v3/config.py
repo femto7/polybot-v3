@@ -22,9 +22,10 @@ MAX_TRADER_DRAWDOWN = 0.30
 MAX_POSITION_PCT = 0.10  # up to 10% of bankroll per asset (leveraged)
 MAX_TOTAL_EXPOSURE_PCT = 20.0  # up to 20x leverage total (matches MAX_LEVERAGE)
 MAX_LEVERAGE = 20.0
-STOP_LOSS_PCT = 0.05
-TRAIL_STOP_PCT = 0.03  # Close if price retraces 3% from peak (after 3% favorable move)
-TRAIL_ACTIVATION_PCT = 0.03
+STOP_LOSS_PCT = 0.04  # Cut losers fast (4%)
+TRAIL_STOP_PCT = 0.08  # Let winners retrace 8% before closing (was 3%)
+TRAIL_ACTIVATION_PCT = 0.12  # Only trail after 12% favorable move (was 3%)
+MIN_TRADER_EXPOSURE = 0.20  # Only copy trader positions that are >= 20% of their equity (high conviction)
 DRAWDOWN_ALERT_PCT = 0.10
 CONSENSUS_PAUSE_THRESHOLD = -0.05  # If avg trader PnL ratio < -5%, pause bot (regime shift)
 MIN_POSITION_USD = 0.50
