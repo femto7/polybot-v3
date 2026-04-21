@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from polybot_v3.leaderboard import select_top_traders
+from polybot_v3.leaderboard import consistency_score, select_top_traders
 
 
 def _row(address, equity, roi_30d, vlm_30d=50_000):
@@ -58,3 +58,29 @@ def test_select_empty_rows():
 def test_select_all_filtered_out():
     rows = [_row("0x1", 1000, 0.001)]
     assert select_top_traders(rows, max_traders=10) == []
+
+
+def test_consistency_score_rewards_stable_traders():
+    # Both have 20% 30d ROI, but A has aligned 7d/1d, B has divergent
+    a = {"roi_30d": 0.20, "roi_7d": 0.05, "roi_1d": 0.007, "equity": 50_000}
+    b = {"roi_30d": 0.20, "roi_7d": 0.19, "roi_1d": 0.001, "equity": 50_000}
+    assert consistency_score(a) > consistency_score(b)
+
+
+def test_consistency_score_prefers_bigger_equity():
+    small = {"roi_30d": 0.20, "roi_7d": 0.05, "roi_1d": 0.007, "equity": 10_000}
+    big = {"roi_30d": 0.20, "roi_7d": 0.05, "roi_1d": 0.007, "equity": 1_000_000}
+    assert consistency_score(big) > consistency_score(small)
+
+
+def test_select_ranks_by_score_not_pure_roi():
+    # Trader A: higher ROI but inconsistent
+    # Trader B: lower ROI but very consistent
+    a = _row("0xA", 50_000, 0.60)
+    a["roi_7d"] = 0.55  # huge divergence
+    a["roi_1d"] = -0.01
+    b = _row("0xB", 50_000, 0.30)
+    b["roi_7d"] = 0.075  # aligned: 7d * 30/7 ≈ 0.32 ≈ 0.30
+    b["roi_1d"] = 0.010  # aligned: 1d * 30 = 0.30
+    selected = select_top_traders([a, b], max_traders=10)
+    assert selected[0]["address"] == "0xB"
