@@ -172,10 +172,15 @@ def run_monitor_cycle(client: HyperliquidClient, tracker: Tracker) -> None:
         tracker.record_bankroll_snapshot(prices)
         return
 
+    # Compound: size positions based on current equity (realized + unrealized)
+    # so winnings are reinvested automatically
+    equity = tracker.equity(prices)
+    trader_weights = {t["address"]: t.get("score", 1.0) for t in traders}
     targets = compute_target_portfolio(
         snapshots,
-        our_bankroll=tracker.bankroll(),
+        our_bankroll=equity,
         max_traders=MAX_TRADERS,
+        trader_weights=trader_weights,
     )
 
     reconcile_positions(tracker, targets, prices)
