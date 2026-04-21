@@ -68,6 +68,36 @@ def test_tiny_position_filtered_out():
     assert "BTC" not in targets
 
 
+def test_weighted_traders_favor_higher_score():
+    traders = {
+        "0xA": _trader_snap(50_000, {"BTC": {"side": "LONG", "size": 0.5, "entry": 95000}}),
+        "0xB": _trader_snap(50_000, {"ETH": {"side": "LONG", "size": 15, "entry": 3500}}),
+    }
+    # 0xA gets 3x more weight than 0xB
+    targets = compute_target_portfolio(
+        traders, our_bankroll=500.0, max_traders=2,
+        trader_weights={"0xA": 3.0, "0xB": 1.0},
+    )
+    assert "BTC" in targets and "ETH" in targets
+    # With equal weights: BTC and ETH would be equal
+    # With 3:1 weight: BTC notional should be ~3x ETH (same exposure ratio ~95%/105%)
+    assert targets["BTC"].notional > targets["ETH"].notional
+
+
+def test_leverage_clamped_at_max():
+    # Trader uses 20x leverage (tiny equity, huge notional)
+    traders = {
+        "0xA": _trader_snap(1000, {
+            "BTC": {"side": "LONG", "size": 0.1, "entry": 100_000, "leverage": 20}
+        })
+    }
+    targets = compute_target_portfolio(traders, our_bankroll=500.0, max_traders=10)
+    # exposure_ratio would be 10x but clamped to MAX_LEVERAGE=5
+    # our share per trader = 50, so our contribution = 50 * 5 = 250
+    # But per-asset cap = 100
+    assert targets["BTC"].notional == pytest.approx(100.0, abs=1.0)
+
+
 def test_total_exposure_cap():
     # 3 traders, each wants 100% exposure in different assets
     traders = {
