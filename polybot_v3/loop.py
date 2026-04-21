@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import threading
 import time
 from datetime import datetime, timezone
 
@@ -17,10 +18,12 @@ from polybot_v3.config import (
 )
 from polybot_v3.hyperliquid_client import HyperliquidClient
 from polybot_v3.leaderboard import select_top_traders
+from polybot_v3.realtime import RealtimeMonitor
 from polybot_v3.replicator import TargetPosition, compute_target_portfolio
 from polybot_v3.telegram import send_message
 from polybot_v3.tracker import Position, Tracker
 from polybot_v3.trader_monitor import snapshot_trader_positions
+from polybot_v3.trailing import should_trail_close, update_peak
 
 log = logging.getLogger(__name__)
 
@@ -187,11 +190,26 @@ def run_monitor_cycle(client: HyperliquidClient, tracker: Tracker) -> None:
     tracker.record_bankroll_snapshot(prices)
 
 
-def run_loop() -> None:
+def run_loop(use_websocket: bool = True) -> None:
     client = HyperliquidClient()
     tracker = Tracker()
-    log.info("Polybot v3 started (paper mode)")
-    send_message("🚀 Polybot v3 started (paper copy trading)")
+    log.info("Polybot v3 started (paper mode, ws=%s)", use_websocket)
+    send_message(f"🚀 Polybot v3 started (paper, ws={'on' if use_websocket else 'off'})")
+
+    # Wake event fired by WS on a trader's fill → triggers immediate reconcile
+    wake_event = threading.Event()
+    rt = None
+    if use_websocket:
+        def on_fill(addr: str, msg: dict):
+            log.info("WS fill received for %s — waking cycle", addr[:10])
+            wake_event.set()
+        try:
+            rt = RealtimeMonitor(on_fill=on_fill)
+            rt.start()
+        except Exception:
+            log.warning("WebSocket failed to start, falling back to polling only",
+                         exc_info=True)
+            rt = None
 
     last_leaderboard = 0.0
     while True:
@@ -200,10 +218,14 @@ def run_loop() -> None:
             if now - last_leaderboard >= LEADERBOARD_CYCLE_SECONDS:
                 refresh_leaderboard(client, tracker)
                 last_leaderboard = now
+                if rt is not None:
+                    rt.sync_subscriptions([t["address"] for t in tracker.load_traders()])
 
             run_monitor_cycle(client, tracker)
         except Exception:
             log.error("Cycle failed", exc_info=True)
             send_message("⚠️ Cycle failed — check logs")
 
-        time.sleep(MONITOR_CYCLE_SECONDS)
+        # Sleep but wake early if WS signals a fill
+        wake_event.wait(timeout=MONITOR_CYCLE_SECONDS)
+        wake_event.clear()
