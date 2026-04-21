@@ -10,7 +10,7 @@ HYPERLIQUID_LEADERBOARD_URL = "https://stats-data.hyperliquid.xyz/Mainnet/leader
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
 
-BANKROLL_INITIAL = 500.0
+BANKROLL_INITIAL = 5000.0
 MAX_TRADERS = 200
 MAX_ASSETS = 9999  # effectively no limit
 
