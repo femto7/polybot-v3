@@ -35,17 +35,27 @@ def refresh_leaderboard(client: HyperliquidClient, tracker: Tracker) -> list[dic
 
 
 def poll_trader_snapshots(client: HyperliquidClient, traders: list[dict]) -> dict:
-    snapshots = {}
-    for t in traders:
-        addr = t["address"]
-        try:
-            state = client.fetch_user_positions(addr)
-            snapshots[addr] = {
-                "equity": state.equity,
-                "positions": snapshot_trader_positions(state),
-            }
-        except Exception:
-            log.warning("Failed to fetch positions for %s", addr, exc_info=True)
+    """Fetch all traders' positions concurrently using a thread pool."""
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    snapshots: dict = {}
+
+    def _one(addr: str):
+        state = client.fetch_user_positions(addr)
+        return addr, {
+            "equity": state.equity,
+            "positions": snapshot_trader_positions(state),
+        }
+
+    with ThreadPoolExecutor(max_workers=min(10, max(1, len(traders)))) as ex:
+        futures = {ex.submit(_one, t["address"]): t["address"] for t in traders}
+        for fut in as_completed(futures):
+            addr = futures[fut]
+            try:
+                addr2, snap = fut.result()
+                snapshots[addr2] = snap
+            except Exception:
+                log.warning("Failed to fetch positions for %s", addr, exc_info=True)
     return snapshots
 
 
