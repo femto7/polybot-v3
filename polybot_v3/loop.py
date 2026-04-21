@@ -146,14 +146,41 @@ def reconcile_positions(
                 log.error("LIVE open failed for %s", asset, exc_info=True)
                 continue
 
+        # On same-side resize: preserve entry_price (weighted avg if scaling up)
+        # so unrealized P&L reflects actual move from original entry, not resets to 0
+        if asset in current and current[asset].side == target.side:
+            existing = current[asset]
+            if target.notional > existing.notional:
+                # Scaling up: weighted average entry
+                added_notional = target.notional - existing.notional
+                added_size = added_notional / px
+                new_size = existing.size + added_size
+                weighted_entry = (
+                    existing.size * existing.entry_price + added_size * px
+                ) / new_size
+                entry_price = weighted_entry
+                size = new_size
+                opened_at = existing.opened_at
+                peak = existing.peak_price
+            else:
+                # Scaling down: keep original entry
+                entry_price = existing.entry_price
+                opened_at = existing.opened_at
+                peak = existing.peak_price
+        else:
+            entry_price = px
+            opened_at = datetime.now(timezone.utc).isoformat()
+            peak = 0.0
+
         pos = Position(
             asset=asset,
             side=target.side,
             size=size,
-            entry_price=px,
+            entry_price=entry_price,
             notional=target.notional,
             source_traders=target.source_traders,
-            opened_at=datetime.now(timezone.utc).isoformat(),
+            opened_at=opened_at,
+            peak_price=peak,
         )
         was_open = asset in current
         tracker.upsert_position(pos)
