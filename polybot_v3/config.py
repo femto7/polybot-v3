@@ -26,6 +26,7 @@ STOP_LOSS_PCT = 0.05
 TRAIL_STOP_PCT = 0.03  # Close if price retraces 3% from peak (after 3% favorable move)
 TRAIL_ACTIVATION_PCT = 0.03
 DRAWDOWN_ALERT_PCT = 0.10
+CONSENSUS_PAUSE_THRESHOLD = -0.05  # If avg trader PnL ratio < -5%, pause bot (regime shift)
 MIN_POSITION_USD = 2.0
 
 LEADERBOARD_CYCLE_SECONDS = 6 * 3600

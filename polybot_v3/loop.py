@@ -5,11 +5,15 @@ import time
 from datetime import datetime, timezone
 
 from polybot_v3.bot_state import is_paused
+from polybot_v3.consensus import consensus_pnl_ratio
 from polybot_v3.config import (
+    CONSENSUS_PAUSE_THRESHOLD,
     LEADERBOARD_CYCLE_SECONDS,
     MAX_TRADERS,
     MONITOR_CYCLE_SECONDS,
     STOP_LOSS_PCT,
+    TRAIL_ACTIVATION_PCT,
+    TRAIL_STOP_PCT,
 )
 from polybot_v3.hyperliquid_client import HyperliquidClient
 from polybot_v3.leaderboard import select_top_traders
@@ -49,6 +53,7 @@ def reconcile_positions(
     tracker: Tracker,
     targets: dict[str, TargetPosition],
     prices: dict[str, float],
+    open_new: bool = True,
 ) -> None:
     current = tracker.load_positions()
 
@@ -96,7 +101,9 @@ def reconcile_positions(
                     f"PnL ${trade.realized_pnl:+.2f}"
                 )
 
-    # Open new positions or resize
+    # Open new positions or resize (unless skipped by consensus pause)
+    if not open_new:
+        return
     current = tracker.load_positions()
     for asset, target in targets.items():
         px = prices.get(asset)
@@ -140,6 +147,20 @@ def run_monitor_cycle(client: HyperliquidClient, tracker: Tracker) -> None:
 
     snapshots = poll_trader_snapshots(client, traders)
     prices = client.fetch_mids()
+
+    # Consensus drawdown: if all traders collectively losing, pause new entries
+    consensus = consensus_pnl_ratio(snapshots, prices)
+    if consensus < CONSENSUS_PAUSE_THRESHOLD:
+        log.warning("CONSENSUS DRAWDOWN %.2f%% — skipping new entries this cycle",
+                    consensus * 100)
+        send_message(
+            f"⚠️ Consensus drawdown {consensus*100:+.1f}% — "
+            f"holding fire (traders losing collectively)"
+        )
+        # Still check existing positions for stops, just don't open new
+        reconcile_positions(tracker, {}, prices, open_new=False)
+        tracker.record_bankroll_snapshot(prices)
+        return
 
     targets = compute_target_portfolio(
         snapshots,
