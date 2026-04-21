@@ -3,7 +3,6 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="refresh" content="15">
 <title>Polybot v3 — {% block title %}Dashboard{% endblock %}</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <style>
@@ -116,10 +115,11 @@ button.danger { background: var(--neg); }
   <a href="/traders" {% if request.path == "/traders" %}class="active"{% endif %}>Traders</a>
   <a href="/analytics" {% if request.path == "/analytics" %}class="active"{% endif %}>Analytics</a>
   <span class="flex1"></span>
-  <span style="font-size:12px;">
+  <span id="status-badge" style="font-size:12px;">
     <span class="status-dot {% if data.paused %}paused{% endif %}"></span>
     {% if data.paused %}PAUSED{% else %}ACTIVE{% endif %}
   </span>
+  <span id="live-pulse" style="font-size:10px;color:var(--pos);">● LIVE</span>
   <button class="ghost" onclick="toggleTheme()">🌓</button>
   {% if data.paused %}
     <button onclick="doAction('/api/resume', 'Resumed')">▶ Resume</button>
@@ -157,6 +157,78 @@ function doAction(url, msg) {
     setTimeout(() => location.reload(), 500);
   });
 }
+
+// Real-time P&L polling (no page refresh)
+function fmt(n, dec=2, sign=false) {
+  const s = sign ? (n >= 0 ? "+" : "") : "";
+  return s + n.toFixed(dec);
+}
+function setText(id, txt, cls) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = txt;
+  if (cls !== undefined) {
+    el.classList.remove("positive", "negative");
+    if (cls) el.classList.add(cls);
+  }
+}
+function pulseLive() {
+  const p = document.getElementById("live-pulse");
+  if (!p) return;
+  p.style.opacity = "1";
+  setTimeout(() => { p.style.opacity = "0.3"; }, 200);
+}
+async function pollLive() {
+  try {
+    const r = await fetch("/api/data");
+    if (!r.ok) return;
+    const d = await r.json();
+    pulseLive();
+
+    // Top KPIs
+    setText("kpi-bankroll", "$" + fmt(d.bankroll), d.bankroll >= d.initial ? "positive" : "negative");
+    setText("kpi-equity", "$" + fmt(d.equity), d.pct_change >= 0 ? "positive" : "negative");
+    setText("kpi-equity-sub", fmt(d.pct_change, 1, true) + "% total");
+    setText("kpi-unrealized", "$" + fmt(d.unrealized_pnl, 2, true), d.unrealized_pnl >= 0 ? "positive" : "negative");
+    setText("kpi-realized", "$" + fmt(d.realized_pnl, 2, true), d.realized_pnl >= 0 ? "positive" : "negative");
+    setText("kpi-open-closed", d.open_count + " / " + d.closed_count);
+    setText("kpi-winrate", d.winrate + "%");
+    setText("kpi-winrate-sub", d.wins + "W / " + d.losses + "L");
+    setText("kpi-exposure", "$" + fmt(d.total_exposure, 0));
+    setText("kpi-avgpnl", "$" + fmt(d.avg_pnl, 2, true), d.avg_pnl >= 0 ? "positive" : "negative");
+    setText("kpi-dd", d.max_drawdown + "%");
+    setText("kpi-traders", d.traders ? d.traders.length : 0);
+
+    // Status badge
+    const badge = document.getElementById("status-badge");
+    if (badge) {
+      badge.innerHTML = '<span class="status-dot ' + (d.paused ? "paused" : "") + '"></span>' +
+                         (d.paused ? "PAUSED" : "ACTIVE");
+    }
+
+    // Live-update unrealized PnL in positions table if present
+    (d.positions || []).forEach(p => {
+      const row = document.querySelector('tr[data-asset-row="' + p.asset + '"]');
+      if (!row) return;
+      const pnlCell = row.querySelector('[data-cell="unrealized_pnl"]');
+      const pctCell = row.querySelector('[data-cell="unrealized_pct"]');
+      const curCell = row.querySelector('[data-cell="current_price"]');
+      if (pnlCell) {
+        pnlCell.textContent = "$" + fmt(p.unrealized_pnl, 2, true);
+        pnlCell.classList.remove("positive", "negative");
+        pnlCell.classList.add(p.unrealized_pnl >= 0 ? "positive" : "negative");
+      }
+      if (pctCell) {
+        pctCell.textContent = fmt(p.unrealized_pct, 1, true) + "%";
+        pctCell.classList.remove("positive", "negative");
+        pctCell.classList.add(p.unrealized_pct >= 0 ? "positive" : "negative");
+      }
+      if (curCell) curCell.textContent = fmt(p.current_price, 4);
+    });
+  } catch (e) { /* silent */ }
+}
+setInterval(pollLive, 3000);
+pollLive();
 
 // Sortable tables
 document.addEventListener("DOMContentLoaded", () => {

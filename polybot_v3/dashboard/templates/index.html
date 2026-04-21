@@ -5,57 +5,57 @@
 <div class="kpi-row">
   <div class="kpi">
     <div class="label">Bankroll</div>
-    <div class="value {% if data.bankroll >= data.initial %}positive{% else %}negative{% endif %}">
+    <div id="kpi-bankroll" class="value {% if data.bankroll >= data.initial %}positive{% else %}negative{% endif %}">
       ${{ "%.2f"|format(data.bankroll) }}
     </div>
     <div class="sub">Initial ${{ "%.0f"|format(data.initial) }}</div>
   </div>
   <div class="kpi">
     <div class="label">Equity</div>
-    <div class="value {% if data.pct_change >= 0 %}positive{% else %}negative{% endif %}">
+    <div id="kpi-equity" class="value {% if data.pct_change >= 0 %}positive{% else %}negative{% endif %}">
       ${{ "%.2f"|format(data.equity) }}
     </div>
-    <div class="sub">{{ "%+.1f"|format(data.pct_change) }}% total</div>
+    <div id="kpi-equity-sub" class="sub">{{ "%+.1f"|format(data.pct_change) }}% total</div>
   </div>
   <div class="kpi">
     <div class="label">Unrealized P&L</div>
-    <div class="value {% if data.unrealized_pnl >= 0 %}positive{% else %}negative{% endif %}">
+    <div id="kpi-unrealized" class="value {% if data.unrealized_pnl >= 0 %}positive{% else %}negative{% endif %}">
       ${{ "%+.2f"|format(data.unrealized_pnl) }}
     </div>
   </div>
   <div class="kpi">
     <div class="label">Realized P&L</div>
-    <div class="value {% if data.realized_pnl >= 0 %}positive{% else %}negative{% endif %}">
+    <div id="kpi-realized" class="value {% if data.realized_pnl >= 0 %}positive{% else %}negative{% endif %}">
       ${{ "%+.2f"|format(data.realized_pnl) }}
     </div>
   </div>
   <div class="kpi">
     <div class="label">Open / Closed</div>
-    <div class="value">{{ data.open_count }} / {{ data.closed_count }}</div>
+    <div id="kpi-open-closed" class="value">{{ data.open_count }} / {{ data.closed_count }}</div>
   </div>
   <div class="kpi">
     <div class="label">Winrate</div>
-    <div class="value">{{ data.winrate }}%</div>
-    <div class="sub">{{ data.wins }}W / {{ data.losses }}L</div>
+    <div id="kpi-winrate" class="value">{{ data.winrate }}%</div>
+    <div id="kpi-winrate-sub" class="sub">{{ data.wins }}W / {{ data.losses }}L</div>
   </div>
   <div class="kpi">
     <div class="label">Max drawdown</div>
-    <div class="value">{{ data.max_drawdown }}%</div>
+    <div id="kpi-dd" class="value">{{ data.max_drawdown }}%</div>
   </div>
   <div class="kpi">
     <div class="label">Avg P&L / trade</div>
-    <div class="value {% if data.avg_pnl >= 0 %}positive{% else %}negative{% endif %}">
+    <div id="kpi-avgpnl" class="value {% if data.avg_pnl >= 0 %}positive{% else %}negative{% endif %}">
       ${{ "%+.2f"|format(data.avg_pnl) }}
     </div>
   </div>
   <div class="kpi">
     <div class="label">Exposure</div>
-    <div class="value">${{ "%.0f"|format(data.total_exposure) }}</div>
+    <div id="kpi-exposure" class="value">${{ "%.0f"|format(data.total_exposure) }}</div>
     <div class="sub">{{ (data.total_exposure / data.initial * 100)|round(0, "floor")|int }}% of initial</div>
   </div>
   <div class="kpi">
     <div class="label">Traders tracked</div>
-    <div class="value">{{ data.traders|length }}</div>
+    <div id="kpi-traders" class="value">{{ data.traders|length }}</div>
   </div>
   <div class="kpi">
     <div class="label">Best asset</div>
@@ -88,17 +88,17 @@
     </thead>
     <tbody>
     {% for p in data.positions %}
-    <tr>
+    <tr data-asset-row="{{ p.asset }}">
       <td><b>{{ p.asset }}</b></td>
       <td><span class="tag tag-{{ p.side|lower }}">{{ p.side }}</span></td>
       <td class="mono" data-sort="{{ p.size }}">{{ "%.4f"|format(p.size) }}</td>
       <td class="mono" data-sort="{{ p.entry_price }}">{{ "%.4f"|format(p.entry_price) }}</td>
-      <td class="mono" data-sort="{{ p.current_price }}">{{ "%.4f"|format(p.current_price) }}</td>
+      <td class="mono" data-cell="current_price" data-sort="{{ p.current_price }}">{{ "%.4f"|format(p.current_price) }}</td>
       <td data-sort="{{ p.notional }}">${{ "%.2f"|format(p.notional) }}</td>
-      <td class="{% if p.unrealized_pnl >= 0 %}positive{% else %}negative{% endif %}" data-sort="{{ p.unrealized_pnl }}">
+      <td class="{% if p.unrealized_pnl >= 0 %}positive{% else %}negative{% endif %}" data-cell="unrealized_pnl" data-sort="{{ p.unrealized_pnl }}">
         ${{ "%+.2f"|format(p.unrealized_pnl) }}
       </td>
-      <td class="{% if p.unrealized_pct >= 0 %}positive{% else %}negative{% endif %}" data-sort="{{ p.unrealized_pct }}">
+      <td class="{% if p.unrealized_pct >= 0 %}positive{% else %}negative{% endif %}" data-cell="unrealized_pct" data-sort="{{ p.unrealized_pct }}">
         {{ "%+.1f"|format(p.unrealized_pct) }}%
       </td>
       <td class="mono truncate" title="{{ p.source_traders|join(', ') }}">
