@@ -133,7 +133,7 @@ def reconcile_positions(
         if asset in current and current[asset].side == target.side:
             existing = current[asset]
             delta = abs(existing.notional - target.notional) / max(existing.notional, 1.0)
-            if delta < 0.10:
+            if delta < 0.03:  # Only skip if resize is < 3% (very micro)
                 continue
 
         if executor is not None:

@@ -7,7 +7,7 @@ from polybot_v3.config import MIN_TRADER_EQUITY, MIN_TRADER_ROI_30D
 
 log = logging.getLogger(__name__)
 
-MIN_VOLUME_30D = 50_000
+MIN_VOLUME_30D = 20_000
 MAX_ROI_30D = 2.0  # Cap at 200% to exclude lucky one-shot plays
 
 
