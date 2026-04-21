@@ -24,6 +24,7 @@ class Position:
     notional: float
     source_traders: list[str]
     opened_at: str
+    peak_price: float = 0.0  # best favorable price seen for trailing stop (0 = not yet set)
 
 
 @dataclass

@@ -65,7 +65,7 @@ def reconcile_positions(
                     f"PnL ${trade.realized_pnl:+.2f}"
                 )
 
-    # Stop-loss check on remaining positions
+    # Stop-loss + trailing stop check on remaining positions
     current = tracker.load_positions()
     for asset, pos in list(current.items()):
         px = prices.get(asset)
@@ -73,11 +73,26 @@ def reconcile_positions(
             continue
         side_sign = 1 if pos.side == "LONG" else -1
         pnl_pct = (px - pos.entry_price) / pos.entry_price * side_sign
+
+        # Hard stop-loss
         if pnl_pct <= -STOP_LOSS_PCT:
             trade = tracker.close_position(asset, exit_price=px)
             if trade:
                 send_message(
                     f"🛑 STOP-LOSS {asset} {trade.side} "
+                    f"PnL ${trade.realized_pnl:+.2f}"
+                )
+            continue
+
+        # Trailing stop — update peak then check retrace
+        pos = update_peak(pos, px)
+        tracker.upsert_position(pos)
+        if should_trail_close(pos, px, trail_pct=TRAIL_STOP_PCT,
+                               activation_pct=TRAIL_ACTIVATION_PCT):
+            trade = tracker.close_position(asset, exit_price=px)
+            if trade:
+                send_message(
+                    f"🎯 TRAIL-STOP {asset} {trade.side} "
                     f"PnL ${trade.realized_pnl:+.2f}"
                 )
 
