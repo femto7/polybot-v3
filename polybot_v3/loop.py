@@ -31,6 +31,12 @@ from polybot_v3.realtime import RealtimeMonitor
 from polybot_v3.replicator import TargetPosition, compute_target_portfolio
 from polybot_v3.telegram import send_message
 from polybot_v3.tracker import Position, Tracker
+from polybot_v3.trader_intel import (
+    add_to_blacklist,
+    auto_blacklist,
+    compute_trader_pnl,
+    load_blacklist,
+)
 from polybot_v3.trader_monitor import snapshot_trader_positions
 from polybot_v3.trailing import should_trail_close, update_peak
 
@@ -39,11 +45,30 @@ log = logging.getLogger(__name__)
 
 def refresh_leaderboard(client: HyperliquidClient, tracker: Tracker) -> list[dict]:
     rows = client.fetch_leaderboard()
+    # Filter out blacklisted traders before selecting top
+    blacklist = load_blacklist()
+    rows = [r for r in rows if r["address"] not in blacklist]
     top = select_top_traders(rows, max_traders=MAX_TRADERS)
     tracker.save_traders(top)
-    log.info("Leaderboard refreshed: %d traders", len(top))
-    send_message(f"📋 Leaderboard updated: {len(top)} traders tracked")
+    log.info("Leaderboard refreshed: %d traders (blacklist=%d)", len(top), len(blacklist))
+    send_message(f"📋 Leaderboard updated: {len(top)} traders (blacklisted {len(blacklist)})")
     return top
+
+
+def run_auto_blacklist(tracker: Tracker) -> None:
+    """Check per-trader P&L and blacklist losers."""
+    trades = tracker.load_trades()
+    traders = tracker.load_traders()
+    if not trades or not traders:
+        return
+    stats = compute_trader_pnl(trades, traders)
+    to_ban = auto_blacklist(stats)
+    if to_ban:
+        add_to_blacklist(to_ban)
+        send_message(f"🚫 Auto-blacklisted {len(to_ban)} underperforming traders")
+        # Remove from tracked list immediately
+        remaining = [t for t in traders if t["address"] not in to_ban]
+        tracker.save_traders(remaining)
 
 
 def poll_trader_snapshots(client: HyperliquidClient, traders: list[dict]) -> dict:
@@ -317,6 +342,7 @@ def run_loop(use_websocket: bool = True, live: bool = False) -> None:
             if now - last_funding >= FUNDING_INTERVAL_HOURS * 3600:
                 accrue_funding(client, tracker)
                 last_funding = now
+                run_auto_blacklist(tracker)
 
             run_monitor_cycle(client, tracker, executor=executor)
         except Exception:
