@@ -69,17 +69,17 @@ def test_tiny_position_filtered_out():
 
 
 def test_weighted_traders_favor_higher_score():
-    # Use 30% exposure (above MIN_TRADER_EXPOSURE=20%)
+    # Small exposure (well under per-asset cap)
     traders = {
-        "0xA": _trader_snap(100_000, {"BTC": {"side": "LONG", "size": 0.3, "entry": 100_000}}),  # 30% exposure
-        "0xB": _trader_snap(100_000, {"ETH": {"side": "LONG", "size": 8.57, "entry": 3500}}),  # 30% exposure
+        "0xA": _trader_snap(100_000, {"BTC": {"side": "LONG", "size": 0.25, "entry": 100_000}}),  # 25% exposure
+        "0xB": _trader_snap(100_000, {"ETH": {"side": "LONG", "size": 7.14, "entry": 3500}}),  # 25% exposure
     }
+    # Very large bankroll so per-asset cap doesn't clip BTC's larger allocation
     targets = compute_target_portfolio(
-        traders, our_bankroll=1_000_000.0, max_traders=2,
+        traders, our_bankroll=10_000_000.0, max_traders=2,
         trader_weights={"0xA": 3.0, "0xB": 1.0},
     )
     assert "BTC" in targets and "ETH" in targets
-    # With 3:1 weight and same exposure ratio: BTC should be ~3x ETH
     assert targets["BTC"].notional > 2 * targets["ETH"].notional
 
 
