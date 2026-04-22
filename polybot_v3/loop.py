@@ -29,6 +29,11 @@ from polybot_v3.hyperliquid_client import HyperliquidClient
 from polybot_v3.leaderboard import select_top_traders
 from polybot_v3.realtime import RealtimeMonitor
 from polybot_v3.replicator import TargetPosition, compute_target_portfolio
+from polybot_v3.risk import (
+    daily_drawdown_check,
+    daily_profit_freeze_check,
+    filter_by_category_limit,
+)
 from polybot_v3.telegram import send_message
 from polybot_v3.tracker import Position, Tracker
 from polybot_v3.trader_intel import (
@@ -285,6 +290,23 @@ def run_monitor_cycle(client: HyperliquidClient, tracker: Tracker, executor=None
         tracker.record_bankroll_snapshot(prices)
         return
 
+    # Risk guards — kill switch and profit freeze based on daily history
+    history = tracker.load_bankroll_history()
+    kill, dd = daily_drawdown_check(history)
+    if kill:
+        log.warning("DAILY KILL SWITCH TRIGGERED — drawdown %.1f%%", dd * 100)
+        send_message(f"🛑 DAILY KILL SWITCH — drawdown {dd*100:.1f}% — closing all + pause")
+        reconcile_positions(tracker, {}, prices, open_new=False, executor=executor)
+        tracker.record_bankroll_snapshot(prices)
+        return
+    freeze, gain = daily_profit_freeze_check(history, initial=tracker._initial_bankroll)
+    if freeze:
+        log.info("PROFIT FREEZE — daily gain %.1f%%", gain * 100)
+        send_message(f"✋ Profit freeze — +{gain*100:.1f}% today, holding positions")
+        reconcile_positions(tracker, {}, prices, open_new=False, executor=executor)
+        tracker.record_bankroll_snapshot(prices)
+        return
+
     # Compound: size positions based on current equity (realized + unrealized)
     # so winnings are reinvested automatically
     equity = tracker.equity(prices)
@@ -295,6 +317,9 @@ def run_monitor_cycle(client: HyperliquidClient, tracker: Tracker, executor=None
         max_traders=MAX_TRADERS,
         trader_weights=trader_weights,
     )
+
+    # Correlation filter: cap positions per asset category
+    targets = filter_by_category_limit(targets, tracker.load_positions())
 
     reconcile_positions(tracker, targets, prices, executor=executor)
     tracker.record_bankroll_snapshot(prices)
