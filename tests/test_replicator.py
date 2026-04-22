@@ -68,15 +68,15 @@ def test_tiny_position_filtered_out():
     assert "BTC" not in targets
 
 
-def test_weighted_traders_favor_higher_score():
-    # Small exposure (well under per-asset cap)
+def test_weighted_traders_favor_higher_score(monkeypatch):
+    # Bypass MIN_TRADER_EXPOSURE filter with low value, use small exposure to stay under cap
+    monkeypatch.setattr("polybot_v3.replicator.MIN_TRADER_EXPOSURE", 0.05)
     traders = {
-        "0xA": _trader_snap(100_000, {"BTC": {"side": "LONG", "size": 0.25, "entry": 100_000}}),  # 25% exposure
-        "0xB": _trader_snap(100_000, {"ETH": {"side": "LONG", "size": 7.14, "entry": 3500}}),  # 25% exposure
+        "0xA": _trader_snap(100_000, {"BTC": {"side": "LONG", "size": 0.1, "entry": 100_000}}),  # 10% exposure
+        "0xB": _trader_snap(100_000, {"ETH": {"side": "LONG", "size": 2.857, "entry": 3500}}),  # 10% exposure
     }
-    # Very large bankroll so per-asset cap doesn't clip BTC's larger allocation
     targets = compute_target_portfolio(
-        traders, our_bankroll=10_000_000.0, max_traders=2,
+        traders, our_bankroll=1_000_000.0, max_traders=2,
         trader_weights={"0xA": 3.0, "0xB": 1.0},
     )
     assert "BTC" in targets and "ETH" in targets
