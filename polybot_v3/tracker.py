@@ -109,9 +109,24 @@ class Tracker:
         )
 
     def bankroll(self) -> float:
+        """Total portfolio equity: initial + realized P&L + funding + fees (all cumulative)."""
         trades = self.load_trades()
         realized = sum(t.realized_pnl for t in trades)
-        return self._initial_bankroll + realized
+        extras = self.cumulative_funding() + self.cumulative_fees()
+        return self._initial_bankroll + realized + extras
+
+    def cumulative_funding(self) -> float:
+        hist = self.load_bankroll_history()
+        return hist[-1].get("cum_funding", 0.0) if hist else 0.0
+
+    def cumulative_fees(self) -> float:
+        hist = self.load_bankroll_history()
+        return hist[-1].get("cum_fees", 0.0) if hist else 0.0
+
+    def add_cash_adjustment(self, funding: float = 0.0, fees: float = 0.0) -> None:
+        """Accrue funding (signed) or fees (negative) into the next snapshot."""
+        self._pending_funding = getattr(self, "_pending_funding", 0.0) + funding
+        self._pending_fees = getattr(self, "_pending_fees", 0.0) + fees
 
     def unrealized_pnl(self, prices: dict[str, float]) -> float:
         positions = self.load_positions()
@@ -136,12 +151,22 @@ class Tracker:
 
     def record_bankroll_snapshot(self, current_prices: dict[str, float]) -> None:
         history = self.load_bankroll_history()
+        prev_funding = history[-1].get("cum_funding", 0.0) if history else 0.0
+        prev_fees = history[-1].get("cum_fees", 0.0) if history else 0.0
+        pending_funding = getattr(self, "_pending_funding", 0.0)
+        pending_fees = getattr(self, "_pending_fees", 0.0)
+        cum_funding = prev_funding + pending_funding
+        cum_fees = prev_fees + pending_fees
+        self._pending_funding = 0.0
+        self._pending_fees = 0.0
         history.append({
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "bankroll": round(self.bankroll(), 2),
             "equity": round(self.equity(current_prices), 2),
             "unrealized": round(self.unrealized_pnl(current_prices), 2),
             "open_count": len(self.load_positions()),
+            "cum_funding": round(cum_funding, 4),
+            "cum_fees": round(cum_fees, 4),
         })
         history = history[-5000:]
         self._bankroll_history_file.parent.mkdir(parents=True, exist_ok=True)

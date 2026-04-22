@@ -9,12 +9,21 @@ from polybot_v3.bot_state import is_paused
 from polybot_v3.consensus import consensus_pnl_ratio
 from polybot_v3.config import (
     CONSENSUS_PAUSE_THRESHOLD,
+    FUNDING_INTERVAL_HOURS,
     LEADERBOARD_CYCLE_SECONDS,
     MAX_TRADERS,
     MONITOR_CYCLE_SECONDS,
     STOP_LOSS_PCT,
     TRAIL_ACTIVATION_PCT,
     TRAIL_STOP_PCT,
+)
+from polybot_v3.costs import (
+    apply_slippage_to_entry,
+    apply_slippage_to_exit,
+    entry_cost,
+    exit_cost,
+    fetch_funding_rates,
+    funding_payment,
 )
 from polybot_v3.hyperliquid_client import HyperliquidClient
 from polybot_v3.leaderboard import select_top_traders
@@ -75,13 +84,16 @@ def reconcile_positions(
     for asset in list(current.keys()):
         target = targets.get(asset)
         if target is None or target.side != current[asset].side:
-            px = prices.get(asset, current[asset].entry_price)
+            raw_px = prices.get(asset, current[asset].entry_price)
+            px = apply_slippage_to_exit(raw_px, current[asset].side)
             if executor is not None:
                 try:
                     executor.market_close(asset)
                 except Exception:
                     log.error("LIVE close failed for %s", asset, exc_info=True)
                     continue
+            # Charge exit fee
+            tracker.add_cash_adjustment(fees=-exit_cost(current[asset].notional))
             trade = tracker.close_position(asset, exit_price=px)
             if trade:
                 emoji = "✅" if trade.realized_pnl >= 0 else "❌"
@@ -126,15 +138,23 @@ def reconcile_positions(
         return
     current = tracker.load_positions()
     for asset, target in targets.items():
-        px = prices.get(asset)
-        if px is None:
+        raw_px = prices.get(asset)
+        if raw_px is None:
             continue
+        # Apply entry slippage
+        px = apply_slippage_to_entry(raw_px, target.side)
         size = target.notional / px
         if asset in current and current[asset].side == target.side:
             existing = current[asset]
             delta = abs(existing.notional - target.notional) / max(existing.notional, 1.0)
             if delta < 0.25:  # Don't churn on < 25% sizing changes
                 continue
+        # Charge entry fee on new/resized portion
+        if asset in current and current[asset].side == target.side:
+            fee_notional = abs(target.notional - current[asset].notional)
+        else:
+            fee_notional = target.notional
+        tracker.add_cash_adjustment(fees=-entry_cost(fee_notional))
 
         if executor is not None:
             try:
@@ -189,6 +209,26 @@ def reconcile_positions(
             f"📝 {action} {asset} {target.side} "
             f"${target.notional:.2f} @ {px:.4f}"
         )
+
+
+def accrue_funding(client: HyperliquidClient, tracker: Tracker) -> None:
+    """Apply hourly funding payments to all open positions."""
+    positions = tracker.load_positions()
+    if not positions:
+        return
+    rates = fetch_funding_rates(client)
+    if not rates:
+        return
+    total = 0.0
+    for asset, pos in positions.items():
+        rate = rates.get(asset)
+        if rate is None:
+            continue
+        pnl = funding_payment(pos.side, pos.notional, rate)
+        total += pnl
+    if abs(total) > 0.01:
+        tracker.add_cash_adjustment(funding=total)
+        log.info("Funding accrued: $%+.2f across %d positions", total, len(positions))
 
 
 def run_monitor_cycle(client: HyperliquidClient, tracker: Tracker, executor=None) -> None:
@@ -264,6 +304,7 @@ def run_loop(use_websocket: bool = True, live: bool = False) -> None:
             rt = None
 
     last_leaderboard = 0.0
+    last_funding = 0.0
     while True:
         try:
             now = time.time()
@@ -272,6 +313,10 @@ def run_loop(use_websocket: bool = True, live: bool = False) -> None:
                 last_leaderboard = now
                 if rt is not None:
                     rt.sync_subscriptions([t["address"] for t in tracker.load_traders()])
+
+            if now - last_funding >= FUNDING_INTERVAL_HOURS * 3600:
+                accrue_funding(client, tracker)
+                last_funding = now
 
             run_monitor_cycle(client, tracker, executor=executor)
         except Exception:

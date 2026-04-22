@@ -30,6 +30,23 @@ DRAWDOWN_ALERT_PCT = 0.10
 CONSENSUS_PAUSE_THRESHOLD = -0.05  # If avg trader PnL ratio < -5%, pause bot (regime shift)
 MIN_POSITION_USD = 0.50
 
+# Trading costs (paper mode realism)
+TAKER_FEE_PCT = 0.00045  # Hyperliquid taker fee 0.045%
+SLIPPAGE_PCT = 0.0005    # 0.05% avg slippage on market orders
+FUNDING_INTERVAL_HOURS = 1
+
+# Trader intelligence
+AUTO_BLACKLIST_PNL = -50.0          # Blacklist trader if they cost us more than $50
+AUTO_BLACKLIST_STREAK = 5            # Blacklist after 5 consecutive losses contributed
+MIN_HOLD_MINUTES = 10                # Don't close position within 10 min of opening
+COPY_ONLY_NEW_ENTRIES = True         # Only copy when trader opens fresh positions (not resize)
+
+# Risk caps
+DAILY_DRAWDOWN_KILL_PCT = 0.10       # Pause all entries if bankroll drops 10% in a day
+DAILY_PROFIT_FREEZE_PCT = 0.15       # Freeze new entries if up 15% today (protect gains)
+MAX_VOL_24H_PCT = 0.30               # Skip assets with > 30% daily volatility
+MAX_POSITIONS_PER_CATEGORY = 4       # Max positions in same correlated category
+
 LEADERBOARD_CYCLE_SECONDS = 6 * 3600
 MONITOR_CYCLE_SECONDS = 15
 PRICE_CYCLE_SECONDS = 15
