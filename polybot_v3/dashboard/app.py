@@ -64,32 +64,31 @@ def create_app(
         for t in traders:
             attrib_pnl = 0.0
             attrib_count = 0
-            wins = 0
-            losses = 0
+            tw = 0
+            tl = 0
             for trade in trades:
                 if t["address"] in trade.source_traders:
-                    p = trade.realized_pnl / len(trade.source_traders)
-                    attrib_pnl += p
+                    p_val = trade.realized_pnl / len(trade.source_traders)
+                    attrib_pnl += p_val
                     attrib_count += 1
-                    if p > 0:
-                        wins += 1
+                    if p_val > 0:
+                        tw += 1
                     else:
-                        losses += 1
+                        tl += 1
             open_contrib = 0.0
-            for p in positions:
-                if t["address"] in p.source_traders:
-                    open_contrib += p.notional / len(p.source_traders)
-            wr = (wins / max(wins + losses, 1)) * 100 if attrib_count else 0
+            for pos in positions:
+                if t["address"] in pos.source_traders:
+                    open_contrib += pos.notional / len(pos.source_traders)
+            wr = (tw / max(tw + tl, 1)) * 100 if attrib_count else 0
             trader_stats.append({
                 **t,
                 "attrib_pnl": round(attrib_pnl, 2),
                 "attrib_trades": attrib_count,
-                "attrib_wins": wins,
-                "attrib_losses": losses,
+                "attrib_wins": tw,
+                "attrib_losses": tl,
                 "attrib_winrate": round(wr, 1),
                 "open_contribution": round(open_contrib, 2),
             })
-        # Rank: best P&L traders first
         trader_stats.sort(key=lambda x: -x["attrib_pnl"])
 
         # Best/worst asset by realized PnL
