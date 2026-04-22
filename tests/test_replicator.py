@@ -75,7 +75,7 @@ def test_weighted_traders_favor_higher_score():
         "0xB": _trader_snap(100_000, {"ETH": {"side": "LONG", "size": 8.57, "entry": 3500}}),  # 30% exposure
     }
     targets = compute_target_portfolio(
-        traders, our_bankroll=100_000.0, max_traders=2,
+        traders, our_bankroll=1_000_000.0, max_traders=2,
         trader_weights={"0xA": 3.0, "0xB": 1.0},
     )
     assert "BTC" in targets and "ETH" in targets
