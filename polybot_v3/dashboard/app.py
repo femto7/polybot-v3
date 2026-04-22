@@ -64,20 +64,33 @@ def create_app(
         for t in traders:
             attrib_pnl = 0.0
             attrib_count = 0
+            wins = 0
+            losses = 0
             for trade in trades:
                 if t["address"] in trade.source_traders:
-                    attrib_pnl += trade.realized_pnl / len(trade.source_traders)
+                    p = trade.realized_pnl / len(trade.source_traders)
+                    attrib_pnl += p
                     attrib_count += 1
+                    if p > 0:
+                        wins += 1
+                    else:
+                        losses += 1
             open_contrib = 0.0
             for p in positions:
                 if t["address"] in p.source_traders:
                     open_contrib += p.notional / len(p.source_traders)
+            wr = (wins / max(wins + losses, 1)) * 100 if attrib_count else 0
             trader_stats.append({
                 **t,
                 "attrib_pnl": round(attrib_pnl, 2),
                 "attrib_trades": attrib_count,
+                "attrib_wins": wins,
+                "attrib_losses": losses,
+                "attrib_winrate": round(wr, 1),
                 "open_contribution": round(open_contrib, 2),
             })
+        # Rank: best P&L traders first
+        trader_stats.sort(key=lambda x: -x["attrib_pnl"])
 
         # Best/worst asset by realized PnL
         asset_pnl = {}
@@ -98,11 +111,22 @@ def create_app(
 
         avg_pnl = (realized / len(trades)) if trades else 0.0
 
+        cum_funding = _tracker.cumulative_funding() if hasattr(_tracker, "cumulative_funding") else 0.0
+        cum_fees = _tracker.cumulative_fees() if hasattr(_tracker, "cumulative_fees") else 0.0
+        try:
+            from polybot_v3.trader_intel import load_blacklist
+            blacklist_count = len(load_blacklist())
+        except Exception:
+            blacklist_count = 0
+
         return {
             "bankroll": round(bankroll, 2),
             "equity": round(equity, 2),
             "unrealized_pnl": round(unrealized, 2),
             "realized_pnl": round(realized, 2),
+            "cum_funding": round(cum_funding, 2),
+            "cum_fees": round(cum_fees, 2),
+            "blacklisted_count": blacklist_count,
             "initial": _tracker._initial_bankroll,
             "pct_change": round(
                 (equity - _tracker._initial_bankroll) / _tracker._initial_bankroll * 100, 2

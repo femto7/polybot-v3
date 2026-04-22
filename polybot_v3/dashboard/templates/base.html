@@ -121,6 +121,7 @@ button.danger { background: var(--neg); }
   </span>
   <span id="live-pulse" style="font-size:10px;color:var(--pos);">● LIVE</span>
   <button class="ghost" onclick="toggleTheme()">🌓</button>
+  <button class="ghost" onclick="toggleMute()" id="mute-btn">🔊</button>
   {% if data.paused %}
     <button onclick="doAction('/api/resume', 'Resumed')">▶ Resume</button>
   {% else %}
@@ -144,6 +145,15 @@ function toggleTheme() {
 const saved = localStorage.getItem("theme");
 if (saved) document.documentElement.setAttribute("data-theme", saved);
 
+function toggleMute() {
+  const now = localStorage.getItem("muted") === "1" ? "0" : "1";
+  localStorage.setItem("muted", now);
+  document.getElementById("mute-btn").textContent = now === "1" ? "🔇" : "🔊";
+}
+if (localStorage.getItem("muted") === "1") {
+  document.getElementById("mute-btn") && (document.getElementById("mute-btn").textContent = "🔇");
+}
+
 function showToast(msg) {
   const t = document.getElementById("toast");
   t.textContent = msg;
@@ -156,6 +166,39 @@ function doAction(url, msg) {
     showToast(msg);
     setTimeout(() => location.reload(), 500);
   });
+}
+
+// Sound alerts (generated via WebAudio, no asset files needed)
+const audioCtx = typeof AudioContext !== "undefined" ? new AudioContext() : null;
+function beep(freq, duration = 150, vol = 0.1) {
+  if (!audioCtx || localStorage.getItem("muted") === "1") return;
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.frequency.value = freq;
+  osc.type = "sine";
+  gain.gain.value = vol;
+  osc.connect(gain); gain.connect(audioCtx.destination);
+  osc.start(); osc.stop(audioCtx.currentTime + duration / 1000);
+}
+function soundWin() { beep(800, 100); setTimeout(() => beep(1200, 150), 100); }
+function soundLoss() { beep(300, 200); setTimeout(() => beep(200, 250), 200); }
+
+let lastClosedCount = null;
+let lastRealizedPnl = null;
+
+function checkForTradeClose(d) {
+  if (lastClosedCount === null) {
+    lastClosedCount = d.closed_count;
+    lastRealizedPnl = d.realized_pnl;
+    return;
+  }
+  if (d.closed_count > lastClosedCount) {
+    const delta = d.realized_pnl - lastRealizedPnl;
+    if (delta > 5) soundWin();
+    else if (delta < -5) soundLoss();
+    lastClosedCount = d.closed_count;
+    lastRealizedPnl = d.realized_pnl;
+  }
 }
 
 // Real-time P&L polling (no page refresh)
@@ -184,6 +227,7 @@ async function pollLive() {
     if (!r.ok) return;
     const d = await r.json();
     pulseLive();
+    checkForTradeClose(d);
 
     // Top KPIs
     setText("kpi-bankroll", "$" + fmt(d.bankroll), d.bankroll >= d.initial ? "positive" : "negative");

@@ -56,6 +56,19 @@
   <div class="kpi">
     <div class="label">Traders tracked</div>
     <div id="kpi-traders" class="value">{{ data.traders|length }}</div>
+    <div class="sub">{{ data.blacklisted_count|default(0) }} blacklisted</div>
+  </div>
+  <div class="kpi">
+    <div class="label">Funding accrued</div>
+    <div class="value {% if data.cum_funding|default(0) >= 0 %}positive{% else %}negative{% endif %}">
+      ${{ "%+.2f"|format(data.cum_funding|default(0)) }}
+    </div>
+  </div>
+  <div class="kpi">
+    <div class="label">Fees paid</div>
+    <div class="value negative">
+      ${{ "%.2f"|format(data.cum_fees|default(0)) }}
+    </div>
   </div>
   <div class="kpi">
     <div class="label">Best asset</div>
